@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trossen_arm_sim"
+version = "0.1.0"
+description = "Simulated Trossen WidowX AI arm controller: a network drop-in replacement for real hardware, running in MuJoCo"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.10"
+dependencies = [
+    "mujoco>=3.0",
+    "numpy",
+    "trossen_arm==1.10.*",
+]
+
+[project.urls]
+Repository = "https://github.com/depetrol/trossen_arm_sim"
+
+[project.scripts]
+trossen-arm-sim = "trossen_arm_sim.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["trossen_arm_sim*"]
+
+[tool.setuptools.package-data]
+trossen_arm_sim = ["assets/*"]
