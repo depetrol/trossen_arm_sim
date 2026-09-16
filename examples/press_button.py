@@ -15,18 +15,44 @@ Then run this client (needs trossen_arm==1.10.*):
 
 Joint positions for each key were recorded against the numpad pose in
 scene_numpad.xml and are stored in positions.json.
+
+The client also connects to the simulator's collision stream and prints
+every contact begin/end event as it happens, unfiltered, so a key press
+shows up as carriage_* <-> key_* and anything else as what it hit.
 """
 
 import argparse
 import json
 import os
+import threading
 
 import numpy as np
 import trossen_arm
+from websockets.sync.client import connect
 
 POSITIONS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                               "positions.json")
 GOAL_TIME = 2.0  # seconds per move
+WS_PORT = 50002  # collision stream
+
+
+def report_collisions(host: str, port: int) -> None:
+    """Print every collision event until the connection closes."""
+    with connect(f"ws://{host}:{port}") as websocket:
+        for message in websocket:
+            event = json.loads(message)
+            if event["type"] == "snapshot":
+                for contact in event["contacts"]:
+                    print(f"\r[collision] active at {event['time']:.3f}s: "
+                          f"{contact['geom1']} ({contact['body1']}) <-> "
+                          f"{contact['geom2']} ({contact['body2']}) "
+                          f"force={contact['force']:.2f}N")
+                continue
+            print(f"\r[collision] {event['time']:8.3f}s {event['type']:5s} "
+                  f"{event['geom1']} ({event['body1']}) <-> "
+                  f"{event['geom2']} ({event['body2']}) "
+                  f"force={event['force']:.2f}N peak={event['peak_force']:.2f}N "
+                  f"duration={event['duration']:.2f}s")
 
 
 def move_home(driver: trossen_arm.TrossenArmDriver) -> None:
@@ -49,7 +75,9 @@ def main() -> None:
     parser.add_argument("keys", nargs="*",
                         help="keys to press (default: interactive prompt)")
     parser.add_argument("--host", default="127.0.0.1",
-                        help="controller address (the simulator, or a real arm)")
+                        help="simulator address")
+    parser.add_argument("--port", type=int, default=WS_PORT,
+                        help="collision stream WebSocket port")
     args = parser.parse_args()
 
     with open(POSITIONS_PATH) as f:
@@ -59,6 +87,9 @@ def main() -> None:
         if key not in key_positions:
             parser.error(f"unknown key '{key}'; "
                          f"available: {', '.join(key_positions)}")
+
+    threading.Thread(target=report_collisions, args=(args.host, args.port),
+                     daemon=True, name="collision-report").start()
 
     driver = trossen_arm.TrossenArmDriver()
     driver.configure(

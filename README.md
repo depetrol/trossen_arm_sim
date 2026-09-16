@@ -43,7 +43,7 @@ A custom scene is MJCF that includes the arm via the `WIDOWX_XML` placeholder, r
 
 ## Example
 
-Numpad scene plus a client that presses its keys:
+Numpad scene plus a client that presses its keys and prints every collision the simulator reports (see [Collision stream](#collision-stream) below):
 
 ```bash
 trossen-arm-sim examples/scene_numpad.xml     # terminal 1
