@@ -4,6 +4,7 @@ import os
 import tempfile
 import threading
 import time
+from typing import Callable
 
 import mujoco
 import numpy as np
@@ -58,7 +59,8 @@ class WidowXSim:
     ground plane (DEFAULT_SCENE). Physics steps run in a background thread
     paced to wall-clock time. Position commands set the arm's
     position-actuator targets; joint states are read back from the
-    simulated joints.
+    simulated joints. Step hooks run after every physics step, while the
+    simulation lock is held, and may inspect model and data directly.
     """
 
     def __init__(self, scene_path: str = DEFAULT_SCENE):
@@ -82,6 +84,7 @@ class WidowXSim:
         self.num_joints = len(JOINT_NAMES)
 
         self._lock = threading.Lock()
+        self._step_hooks: list[Callable[[], None]] = []
         self._running = False
         self._thread: threading.Thread | None = None
 
@@ -96,6 +99,15 @@ class WidowXSim:
     def joint_limits(self) -> list[tuple[float, float]]:
         """(min, max) actuator range per joint, arm joints then gripper."""
         return [tuple(self.model.actuator_ctrlrange[i]) for i in self._actuator_ids]
+
+    def add_step_hook(self, hook: Callable[[], None]) -> None:
+        """Register a callable to run after each physics step.
+
+        The hook runs on the stepping thread with the simulation lock held,
+        so it must be quick and must not call the locking methods of this
+        class (apply_joint_commands, read_joint_outputs).
+        """
+        self._step_hooks.append(hook)
 
     def start(self) -> None:
         self._running = True
@@ -115,6 +127,8 @@ class WidowXSim:
         while self._running:
             with self._lock:
                 mujoco.mj_step(self.model, self.data)
+                for hook in self._step_hooks:
+                    hook()
             next_step += dt
             delay = next_step - time.perf_counter()
             if delay > 0:
