@@ -64,7 +64,24 @@ class ConfigurationAddress(IntEnum):
 
 
 class ErrorState(IntEnum):
+    """Error states of the arm controller, as reported to the driver."""
     NONE = 0
+    ETHERNET_INIT_FAILED = 1
+    CAN_INIT_FAILED = 2
+    JOINT_COMMAND_FAILED = 3
+    JOINT_FEEDBACK_FAILED = 4
+    JOINT_CLEAR_ERROR_FAILED = 5
+    JOINT_ENABLE_FAILED = 6
+    JOINT_DISABLE_FAILED = 7
+    JOINT_SET_HOME_FAILED = 8
+    JOINT_DISABLED_UNEXPECTEDLY = 9
+    JOINT_OVERHEATED = 10
+    INVALID_MODE = 11
+    INVALID_ROBOT_COMMAND = 12
+    INVALID_CONFIGURATION_ADDRESS = 13
+    ROBOT_INPUT_MODE_MISMATCH = 14
+    JOINT_LIMIT_EXCEEDED = 15
+    ROBOT_INPUT_INFINITE = 16
 
 
 class Model(IntEnum):
@@ -145,21 +162,21 @@ def parse_robot_input(payload: bytes, num_joints: int = NUM_JOINTS) -> list[Join
     ]
 
 
-def pack_robot_output(output_id: int, timestamp_us: int,
+def pack_robot_output(error_state: ErrorState, output_id: int, timestamp_us: int,
                       joint_outputs: list[JointOutput]) -> bytes:
     """Pack a robot output datagram: [error_state][header][joint outputs]."""
     return (
-        bytes([ErrorState.NONE])
+        bytes([error_state])
         + OUTPUT_HEADER_STRUCT.pack(output_id, timestamp_us)
         + b"".join(out.pack() for out in joint_outputs)
     )
 
 
-def pack_handshake_response(model: Model) -> bytes:
+def pack_handshake_response(error_state: ErrorState, model: Model) -> bytes:
     """[error_state][model][fw_major][fw_minor][fw_patch]
 
     The driver requires the firmware major and minor versions to match its
     own (1.10.x).
     """
     major, minor, patch = DRIVER_VERSION
-    return bytes([ErrorState.NONE, model, major, minor, patch])
+    return bytes([error_state, model, major, minor, patch])

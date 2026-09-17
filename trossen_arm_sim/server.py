@@ -34,6 +34,13 @@ class TrossenArmSimServer:
     with a uint16 little-endian length prefix. UDP (port 50000) carries the
     realtime joint input/output cycle: every SET_ROBOT_INPUT datagram is
     answered with one robot output datagram sent back to its source.
+
+    fault() puts the controller into an error state like a hardware fault
+    would: joints go idle and every response reports the error, which makes
+    the driver raise. The real controller keeps its error state until the
+    driver clears it with configure(..., clear_error=True); here it is also
+    cleared by the next handshake, so consecutive test runs against one
+    simulator do not need a manual reset.
     """
 
     # Minimum realtime cycle period. Keeps the driver's daemon loop from
@@ -49,6 +56,8 @@ class TrossenArmSimServer:
         self.num_joints = sim.num_joints
         self.modes = [Mode.IDLE] * self.num_joints
         self.end_effector = bytes(END_EFFECTOR_SIZE)
+        self.error_state = ErrorState.NONE
+        self.fault_reason = ""
         self._start_time = time.monotonic()
         self._output_id = 0
         self._last_cycle = 0.0
@@ -75,6 +84,19 @@ class TrossenArmSimServer:
             self._threads.append(thread)
         logger.info("Listening on %s (TCP %d, UDP %d)",
                     self.host, TCP_PORT, UDP_PORT)
+
+    def fault(self, error_state: ErrorState, reason: str) -> None:
+        """Enter an error state and stop driving the joints."""
+        logger.error("Fault (%s): %s", error_state.name, reason)
+        self.error_state = error_state
+        self.fault_reason = reason
+        self.modes = [Mode.IDLE] * self.num_joints
+
+    def clear_error(self) -> None:
+        if self.error_state != ErrorState.NONE:
+            logger.info("Error state %s cleared", self.error_state.name)
+        self.error_state = ErrorState.NONE
+        self.fault_reason = ""
 
     def stop(self) -> None:
         self._running = False
@@ -134,26 +156,30 @@ class TrossenArmSimServer:
             ip = socket.inet_ntoa(request[1:5])
             (udp_port,) = struct.unpack("<H", request[5:7])
             logger.info("Handshake: driver UDP endpoint %s:%d", ip, udp_port)
-            return pack_handshake_response(self.model)
+            self.clear_error()
+            return pack_handshake_response(self.error_state, self.model)
 
         if command == TCPCommand.SET_CONFIGURATION:
             self._apply_configuration(ConfigurationAddress(request[1]), request[2:])
-            return bytes([ErrorState.NONE])
+            return bytes([self.error_state])
 
         if command == TCPCommand.GET_CONFIGURATION:
             address = ConfigurationAddress(request[1])
-            return bytes([ErrorState.NONE]) + self._read_configuration(address)
+            return bytes([self.error_state]) + self._read_configuration(address)
 
         if command == TCPCommand.GET_LOG:
-            return bytes([ErrorState.NONE]) + b"simulation controller: no log entries"
+            log = self.fault_reason or "simulation controller: no log entries"
+            return bytes([self.error_state]) + log.encode() + b"\0"
 
         # SET_HOME, UPDATE_DEFAULT_EEPROM, REBOOT: acknowledge without effect.
-        return bytes([ErrorState.NONE])
+        return bytes([self.error_state])
 
     def _apply_configuration(self, address: ConfigurationAddress,
                              payload: bytes) -> None:
         logger.info("set_configuration(%s, %d bytes)", address.name, len(payload))
-        if address == ConfigurationAddress.MODES:
+        if address == ConfigurationAddress.ERROR_STATE:
+            self.clear_error()
+        elif address == ConfigurationAddress.MODES:
             self.modes = [Mode(b) for b in payload[:self.num_joints]]
             logger.info("Modes set to %s", [m.name for m in self.modes])
         elif address == ConfigurationAddress.END_EFFECTOR:
@@ -163,6 +189,8 @@ class TrossenArmSimServer:
 
     def _read_configuration(self, address: ConfigurationAddress) -> bytes:
         logger.info("get_configuration(%s)", address.name)
+        if address == ConfigurationAddress.ERROR_STATE:
+            return bytes([self.error_state])
         if address == ConfigurationAddress.FACTORY_RESET_FLAG:
             return bytes([0])
         if address == ConfigurationAddress.IP_METHOD:
@@ -236,5 +264,5 @@ class TrossenArmSimServer:
     def _pack_output(self) -> bytes:
         self._output_id += 1
         timestamp_us = int((time.monotonic() - self._start_time) * 1e6)
-        return pack_robot_output(self._output_id, timestamp_us,
+        return pack_robot_output(self.error_state, self._output_id, timestamp_us,
                                  self.sim.read_joint_outputs())
