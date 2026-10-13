@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "trossen_arm_sim"
-version = "0.2.2"
+version = "0.2.3"
 description = "Simulated Trossen WidowX AI arm controller: a network drop-in replacement for real hardware, running in MuJoCo"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -12,7 +12,7 @@ requires-python = ">=3.10"
 dependencies = [
     "mujoco>=3.0",
     "numpy",
-    "trossen_arm>=1.9,<1.11",
+    "trossen_arm>=1.9,<1.12",
     "websockets>=13",
 ]
 

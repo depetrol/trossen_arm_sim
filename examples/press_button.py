@@ -8,7 +8,7 @@ or with the MuJoCo viewer (macOS needs mjpython):
 
     mjpython -m trossen_arm_sim examples/scene_numpad.xml --viewer
 
-Then run this client (needs trossen_arm 1.9 or 1.10, matching the simulator):
+Then run this client (needs trossen_arm 1.9 to 1.11, matching the simulator):
 
     python examples/press_button.py 1 2 3 enter
     python examples/press_button.py              # interactive prompt

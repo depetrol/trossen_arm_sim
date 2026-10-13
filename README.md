@@ -1,6 +1,6 @@
 # trossen_arm_sim
 
-Runs `trossen_arm` in simulation. The server speaks the wire protocol of the WidowX AI (wxai_v0) arm controller (firmware v1.9 and v1.10), so the unmodified `trossen_arm` driver connects to it as if it were real hardware — the arm runs in MuJoCo instead.
+Runs `trossen_arm` in simulation. The server speaks the wire protocol of the WidowX AI (wxai_v0) arm controller (firmware v1.9 to v1.11), so the unmodified `trossen_arm` driver connects to it as if it were real hardware — the arm runs in MuJoCo instead.
 
 ## Install
 
@@ -8,7 +8,7 @@ Runs `trossen_arm` in simulation. The server speaks the wire protocol of the Wid
 pip install trossen_arm_sim
 ```
 
-Clients need `trossen_arm` 1.9 or 1.10. The driver rejects firmware whose major.minor version differs from its own, so the simulator reports the version of the `trossen_arm` installed alongside it. To serve clients running the other version, pass `--driver-version`.
+Clients need `trossen_arm` 1.9, 1.10 or 1.11. The driver rejects firmware whose major.minor version differs from its own, so the simulator reports the version of the `trossen_arm` installed alongside it. To serve clients running a different version, pass `--driver-version`.
 
 ## Usage
 
@@ -126,3 +126,5 @@ twine upload dist/*
 ## Attributions
 
 The arm model and meshes in `trossen_arm_sim/assets/` are from [trossen_arm_mujoco](https://github.com/TrossenRobotics/trossen_arm_mujoco), Copyright (c) 2025 Trossen Robotics, licensed under BSD-3-Clause.
+
+The default link and joint properties in `trossen_arm_sim/assets/links_joints_wxai_v0_20260626.json` are from [trossen_arm](https://github.com/TrossenRobotics/trossen_arm) (`StandardLinks` and `StandardJoints.wxai_v0_20260626`), Copyright (c) 2025 Trossen Robotics, licensed under BSD-3-Clause.

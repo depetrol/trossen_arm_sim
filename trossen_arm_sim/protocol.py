@@ -1,4 +1,4 @@
-"""Wire protocol of the Trossen arm controller (libtrossen_arm v1.9, v1.10).
+"""Wire protocol of the Trossen arm controller (libtrossen_arm v1.9 to v1.11).
 
 The driver talks to the arm controller over two channels:
 
@@ -22,7 +22,7 @@ TCP_PORT = 50001
 UDP_PORT = 50000
 
 # trossen_arm versions (major.minor) that share this wire protocol.
-SUPPORTED_DRIVER_VERSIONS = ("1.9", "1.10")
+SUPPORTED_DRIVER_VERSIONS = ("1.9", "1.10", "1.11")
 # major.minor of the trossen_arm installed alongside the simulator.
 INSTALLED_DRIVER_VERSION = ".".join(version("trossen_arm").split(".")[:2])
 
@@ -65,6 +65,8 @@ class ConfigurationAddress(IntEnum):
     END_EFFECTOR = 9
     JOINT_LIMITS = 10
     MOTOR_PARAMETERS = 11
+    LINKS = 12  # v1.11
+    JOINTS = 13  # v1.11
 
 
 class ErrorState(IntEnum):
@@ -111,11 +113,15 @@ JOINT_LIMIT_STRUCT = struct.Struct("<7f")
 JOINT_CHARACTERISTIC_STRUCT = struct.Struct("<6f")
 
 # struct LinkRaw { float mass; float inertia[9]; float origin_xyz[3];
-#                  float origin_rpy[3]; } -> 16 floats
+#                  float origin_rpy[3]; }
+LINK_STRUCT = struct.Struct("<16f")
+# struct JointRaw { float axis[6]; float origin_xyz[3]; float origin_rpy[3]; }
+JOINT_STRUCT = struct.Struct("<12f")
+
 # struct EndEffectorRaw { LinkRaw palm, finger_left, finger_right;
 #                         float offset_finger_left, offset_finger_right,
 #                         pitch_circle_radius; }
-END_EFFECTOR_SIZE = 3 * 16 * 4 + 3 * 4
+END_EFFECTOR_SIZE = 3 * LINK_STRUCT.size + 3 * 4
 
 
 @dataclass

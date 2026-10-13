@@ -1,6 +1,8 @@
 """TCP/UDP server emulating a Trossen arm controller backed by MuJoCo."""
 
+import json
 import logging
+import os
 import socket
 import struct
 import threading
@@ -11,6 +13,8 @@ from .protocol import (
     INSTALLED_DRIVER_VERSION,
     JOINT_CHARACTERISTIC_STRUCT,
     JOINT_LIMIT_STRUCT,
+    JOINT_STRUCT,
+    LINK_STRUCT,
     SUPPORTED_DRIVER_VERSIONS,
     TCP_PORT,
     UDP_PORT,
@@ -24,9 +28,15 @@ from .protocol import (
     pack_robot_output,
     parse_robot_input,
 )
-from .sim import WidowXSim
+from .sim import ASSETS_DIR, WidowXSim
 
 logger = logging.getLogger("trossen_arm_sim")
+
+# Link inertial and joint kinematic properties that a newly manufactured
+# wxai_v0 controller holds in EEPROM (trossen_arm's
+# StandardLinks/StandardJoints.wxai_v0_20260626).
+DEFAULT_LINKS_JOINTS_PATH = os.path.join(
+    ASSETS_DIR, "links_joints_wxai_v0_20260626.json")
 
 
 class TrossenArmSimServer:
@@ -69,6 +79,16 @@ class TrossenArmSimServer:
         self.num_joints = sim.num_joints
         self.modes = [Mode.IDLE] * self.num_joints
         self.end_effector = bytes(END_EFFECTOR_SIZE)
+        with open(DEFAULT_LINKS_JOINTS_PATH) as f:
+            defaults = json.load(f)
+        self.links = b"".join(
+            LINK_STRUCT.pack(link["mass"], *link["inertia"],
+                             *link["origin_xyz"], *link["origin_rpy"])
+            for link in defaults["links"])
+        self.joints = b"".join(
+            JOINT_STRUCT.pack(*joint["axis"], *joint["origin_xyz"],
+                              *joint["origin_rpy"])
+            for joint in defaults["joints"])
         self.error_state = ErrorState.NONE
         self.fault_reason = ""
         self._start_time = time.monotonic()
@@ -198,8 +218,13 @@ class TrossenArmSimServer:
             logger.info("Modes set to %s", [m.name for m in self.modes])
         elif address == ConfigurationAddress.END_EFFECTOR:
             self.end_effector = payload
+        elif address == ConfigurationAddress.LINKS:
+            self.links = payload
+        elif address == ConfigurationAddress.JOINTS:
+            self.joints = payload
         # Network settings, joint characteristics, limits, motor parameters
-        # and error-state resets have no effect on the simulation.
+        # and error-state resets have no effect on the simulation. End
+        # effector, links and joints are stored for reading back only.
 
     def _read_configuration(self, address: ConfigurationAddress) -> bytes:
         logger.info("get_configuration(%s)", address.name)
@@ -227,6 +252,10 @@ class TrossenArmSimServer:
             return bytes(self.modes)
         if address == ConfigurationAddress.END_EFFECTOR:
             return self.end_effector
+        if address == ConfigurationAddress.LINKS:
+            return self.links
+        if address == ConfigurationAddress.JOINTS:
+            return self.joints
         if address == ConfigurationAddress.JOINT_LIMITS:
             limits = b""
             for low, high in self.sim.joint_limits:
