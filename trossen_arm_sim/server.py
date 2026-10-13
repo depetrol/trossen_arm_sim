@@ -8,8 +8,10 @@ import time
 
 from .protocol import (
     END_EFFECTOR_SIZE,
+    INSTALLED_DRIVER_VERSION,
     JOINT_CHARACTERISTIC_STRUCT,
     JOINT_LIMIT_STRUCT,
+    SUPPORTED_DRIVER_VERSIONS,
     TCP_PORT,
     UDP_PORT,
     ConfigurationAddress,
@@ -35,6 +37,11 @@ class TrossenArmSimServer:
     realtime joint input/output cycle: every SET_ROBOT_INPUT datagram is
     answered with one robot output datagram sent back to its source.
 
+    The driver rejects firmware whose major.minor version differs from its
+    own, and its handshake does not say which version it is, so the server
+    reports driver_version as its firmware version. Only clients running
+    that trossen_arm version can connect.
+
     fault() puts the controller into an error state like a hardware fault
     would: joints go idle and every response reports the error, which makes
     the driver raise. The real controller keeps its error state until the
@@ -49,10 +56,16 @@ class TrossenArmSimServer:
     CYCLE_PERIOD_S = 0.0002
 
     def __init__(self, sim: WidowXSim, host: str = "0.0.0.0",
-                 model: Model = Model.WXAI_V0):
+                 model: Model = Model.WXAI_V0,
+                 driver_version: str = INSTALLED_DRIVER_VERSION):
+        if driver_version not in SUPPORTED_DRIVER_VERSIONS:
+            raise ValueError(
+                f"trossen_arm {driver_version} is not supported; supported "
+                f"versions: {', '.join(SUPPORTED_DRIVER_VERSIONS)}")
         self.sim = sim
         self.host = host
         self.model = model
+        self.driver_version = driver_version
         self.num_joints = sim.num_joints
         self.modes = [Mode.IDLE] * self.num_joints
         self.end_effector = bytes(END_EFFECTOR_SIZE)
@@ -82,8 +95,8 @@ class TrossenArmSimServer:
             thread = threading.Thread(target=target, daemon=True, name=name)
             thread.start()
             self._threads.append(thread)
-        logger.info("Listening on %s (TCP %d, UDP %d)",
-                    self.host, TCP_PORT, UDP_PORT)
+        logger.info("Listening on %s (TCP %d, UDP %d) for trossen_arm %s clients",
+                    self.host, TCP_PORT, UDP_PORT, self.driver_version)
 
     def fault(self, error_state: ErrorState, reason: str) -> None:
         """Enter an error state and stop driving the joints."""
@@ -157,7 +170,8 @@ class TrossenArmSimServer:
             (udp_port,) = struct.unpack("<H", request[5:7])
             logger.info("Handshake: driver UDP endpoint %s:%d", ip, udp_port)
             self.clear_error()
-            return pack_handshake_response(self.error_state, self.model)
+            return pack_handshake_response(self.error_state, self.model,
+                                           self.driver_version)
 
         if command == TCPCommand.SET_CONFIGURATION:
             self._apply_configuration(ConfigurationAddress(request[1]), request[2:])

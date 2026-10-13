@@ -2,6 +2,7 @@
 
 Usage:
     python -m trossen_arm_sim [SCENE] [--viewer] [--verbose] [--ws-port PORT]
+                              [--driver-version VERSION]
 
 SCENE is a MuJoCo MJCF file that includes the packaged arm model via
 `<include file="WIDOWX_XML"/>`; the WIDOWX_XML and TROSSEN_ARM_ASSET_DIR
@@ -9,6 +10,9 @@ placeholders are replaced with the installed asset paths at load time. It
 defaults to a built-in empty scene with just the arm on a ground plane.
 With --viewer, a MuJoCo viewer window shows the scene (on macOS this
 requires running under mjpython).
+
+Clients must run the trossen_arm version given by --driver-version, which
+defaults to the version installed alongside the simulator.
 
 Contacts in the scene are streamed as JSON over a WebSocket on --ws-port;
 see collision_server.py for the messages.
@@ -20,6 +24,7 @@ import time
 
 from .collision import CollisionMonitor
 from .collision_server import WS_PORT, CollisionWebSocketServer
+from .protocol import INSTALLED_DRIVER_VERSION, SUPPORTED_DRIVER_VERSIONS
 from .server import TrossenArmSimServer
 from .sim import DEFAULT_SCENE, WidowXSim
 
@@ -36,6 +41,10 @@ def main() -> None:
                         help="log every protocol request")
     parser.add_argument("--ws-port", type=int, default=WS_PORT,
                         help="WebSocket port for the collision stream")
+    parser.add_argument("--driver-version", choices=SUPPORTED_DRIVER_VERSIONS,
+                        default=INSTALLED_DRIVER_VERSION,
+                        help="trossen_arm major.minor version of the clients "
+                             "(default: the installed trossen_arm, %(default)s)")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -46,7 +55,8 @@ def main() -> None:
     sim = WidowXSim(args.scene)
     monitor = CollisionMonitor(sim)
     sim.start()
-    server = TrossenArmSimServer(sim, host=args.host)
+    server = TrossenArmSimServer(sim, host=args.host,
+                                 driver_version=args.driver_version)
     server.start()
     collision_server = CollisionWebSocketServer(monitor, host=args.host,
                                                 port=args.ws_port)

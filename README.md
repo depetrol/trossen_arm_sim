@@ -1,14 +1,14 @@
 # trossen_arm_sim
 
-Runs `trossen_arm` in simulation. The server speaks the wire protocol of the WidowX AI (wxai_v0) arm controller (firmware v1.10), so the unmodified `trossen_arm` driver connects to it as if it were real hardware — the arm runs in MuJoCo instead.
+Runs `trossen_arm` in simulation. The server speaks the wire protocol of the WidowX AI (wxai_v0) arm controller (firmware v1.9 and v1.10), so the unmodified `trossen_arm` driver connects to it as if it were real hardware — the arm runs in MuJoCo instead.
 
 ## Install
 
 ```bash
-pip install .
+pip install trossen_arm_sim
 ```
 
-Clients need `trossen_arm==1.10.*` (the driver rejects other firmware versions).
+Clients need `trossen_arm` 1.9 or 1.10. The driver rejects firmware whose major.minor version differs from its own, so the simulator reports the version of the `trossen_arm` installed alongside it. To serve clients running the other version, pass `--driver-version`.
 
 ## Usage
 
@@ -16,6 +16,7 @@ Clients need `trossen_arm==1.10.*` (the driver rejects other firmware versions).
 trossen-arm-sim                        # default scene: arm on a ground plane
 trossen-arm-sim scene.xml              # custom scene
 mjpython -m trossen_arm_sim --viewer   # MuJoCo viewer (macOS needs mjpython)
+trossen-arm-sim --driver-version 1.9   # clients running trossen_arm 1.9
 ```
 
 Point any `trossen_arm` client at `127.0.0.1` instead of the robot's IP:

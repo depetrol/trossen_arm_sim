@@ -1,4 +1,4 @@
-"""Wire protocol of the Trossen arm controller (libtrossen_arm v1.10).
+"""Wire protocol of the Trossen arm controller (libtrossen_arm v1.9, v1.10).
 
 The driver talks to the arm controller over two channels:
 
@@ -15,12 +15,16 @@ positions in m, efforts in Nm (arm) or N (gripper).
 import struct
 from dataclasses import dataclass
 from enum import IntEnum
+from importlib.metadata import version
 
 
 TCP_PORT = 50001
 UDP_PORT = 50000
 
-DRIVER_VERSION = (1, 10, 0)
+# trossen_arm versions (major.minor) that share this wire protocol.
+SUPPORTED_DRIVER_VERSIONS = ("1.9", "1.10")
+# major.minor of the trossen_arm installed alongside the simulator.
+INSTALLED_DRIVER_VERSION = ".".join(version("trossen_arm").split(".")[:2])
 
 NUM_JOINTS = 7  # 6 arm joints + gripper (wxai_v0)
 
@@ -172,11 +176,13 @@ def pack_robot_output(error_state: ErrorState, output_id: int, timestamp_us: int
     )
 
 
-def pack_handshake_response(error_state: ErrorState, model: Model) -> bytes:
+def pack_handshake_response(error_state: ErrorState, model: Model,
+                            driver_version: str) -> bytes:
     """[error_state][model][fw_major][fw_minor][fw_patch]
 
     The driver requires the firmware major and minor versions to match its
-    own (1.10.x).
+    own, so the firmware version reported is driver_version ("major.minor")
+    with patch 0.
     """
-    major, minor, patch = DRIVER_VERSION
-    return bytes([error_state, model, major, minor, patch])
+    major, minor = map(int, driver_version.split("."))
+    return bytes([error_state, model, major, minor, 0])
